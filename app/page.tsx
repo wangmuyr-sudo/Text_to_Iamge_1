@@ -17,7 +17,6 @@ export default function Home() {
   const [isPanning, setIsPanning] = useState(false)
   const lastMousePosition = useRef({ x: 0, y: 0 })
 
-  // 编辑状态
   const [rotate, setRotate] = useState(0)
   const [flipHorizontal, setFlipHorizontal] = useState(false)
   const [flipVertical, setFlipVertical] = useState(false)
@@ -102,10 +101,12 @@ export default function Home() {
     e.preventDefault()
     setDragging(true)
   }
+
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
   }
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
@@ -155,7 +156,6 @@ export default function Home() {
     return () => images.forEach(url => URL.revokeObjectURL(url))
   }, [images])
 
-  // === 🔥 编辑功能：旋转 / 翻转 ===
   const handleRotate = () => {
     setRotate(prev => (prev + 90) % 360)
   }
@@ -168,7 +168,6 @@ export default function Home() {
     setFlipVertical(prev => !prev)
   }
 
-  // === 🔥 转换提交 ===
   const handleConvert = async () => {
     if (files.length === 0) {
       alert('请先上传图片')
@@ -186,10 +185,7 @@ export default function Home() {
       formData.append('flipHorizontal', String(flipHorizontal))
       formData.append('flipVertical', String(flipVertical))
 
-      const res = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData
-      })
+      const res = await fetch('/api/convert', { method: 'POST', body: formData })
 
       if (!res.ok) {
         let msg = '转换失败'
@@ -219,37 +215,27 @@ export default function Home() {
 
   const selectedImage = images[selectedIndex]
   const selectedFile = files[selectedIndex]
+  const hasImage = !!selectedImage
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
-      <div className="h-14 bg-yellow-400 flex items-center justify-between px-5 border-b">
-        <div className="font-bold text-lg">AI 图片转换工具</div>
-        <button className="bg-black text-white px-5 py-2 rounded-lg">保存</button>
+    <div className="h-screen flex flex-col bg-[#f7f8fa] text-[#1d1d1f]">
+      <div className="h-14 bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center px-6 shadow-md text-white">
+        <div className="font-bold text-lg tracking-wide">🖼️ 智能图片转换工具</div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-16 bg-white border-r flex flex-col items-center py-4 gap-4">
-          <label className="text-sm cursor-pointer">
+        <div className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-5 shadow-sm">
+          <label className="text-sm cursor-pointer text-center hover:text-blue-600 transition">
             上传
             <input type="file" accept="image/*" multiple onChange={handleUpload} className="hidden" />
           </label>
 
-          <button onClick={handleRotate} className="text-sm" disabled={!selectedImage}>
-            旋转
-          </button>
-
-          <button onClick={handleFlipHorizontal} className="text-sm" disabled={!selectedImage}>
-            水平翻转
-          </button>
-
-          <button onClick={handleFlipVertical} className="text-sm" disabled={!selectedImage}>
-            垂直翻转
-          </button>
+          <button onClick={handleRotate} disabled={!hasImage} className="text-sm disabled:text-gray-300 hover:text-blue-600 transition">旋转</button>
+          <button onClick={handleFlipHorizontal} disabled={!hasImage} className="text-sm disabled:text-gray-300 hover:text-blue-600 transition">水平翻转</button>
+          <button onClick={handleFlipVertical} disabled={!hasImage} className="text-sm disabled:text-gray-300 hover:text-blue-600 transition">垂直翻转</button>
 
           {files.length > 0 && (
-            <button onClick={handleClearAll} className="text-sm text-red-500 mt-2">
-              清空
-            </button>
+            <button onClick={handleClearAll} className="text-sm text-red-500 hover:text-red-600 transition">清空</button>
           )}
         </div>
 
@@ -257,7 +243,9 @@ export default function Home() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`flex-1 flex flex-col overflow-hidden transition ${dragging ? 'bg-blue-50 border-2 border-dashed border-blue-500' : 'bg-gray-50'}`}
+          className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
+            dragging ? 'bg-blue-50 border-2 border-dashed border-blue-400' : 'bg-gray-50'
+          }`}
         >
           <div
             onWheel={handleWheel}
@@ -266,60 +254,62 @@ export default function Home() {
             onMouseUp={stopPanning}
             onMouseLeave={stopPanning}
             onDoubleClick={resetViewer}
-            className={`relative flex-1 overflow-hidden bg-gray-50 select-none ${selectedImage ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+            className={`relative flex-1 overflow-hidden bg-white select-none transition ${
+              hasImage ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''
+            }`}
           >
-            {selectedImage ? (
+            {hasImage ? (
               <>
-                <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center">
                   <img
                     src={selectedImage}
-                    alt="preview"
+                    alt="预览"
                     draggable={false}
-                    className="bg-white border shadow pointer-events-none"
+                    className="bg-white rounded-lg shadow-lg object-contain"
                     style={{
-                      maxWidth: 'none',
-                      maxHeight: 'none',
-                      width: 'auto',
-                      height: 'auto',
+                      maxWidth: '90%',
+                      maxHeight: '90%',
                       transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale}) rotate(${rotate}deg) scale(${flipHorizontal ? -1 : 1}, ${flipVertical ? -1 : 1})`,
                       transformOrigin: 'center center',
-                      willChange: 'transform',
                     }}
                   />
                 </div>
 
-                <div className="absolute right-4 top-4 bg-black/70 text-white text-xs px-3 py-1 rounded-full pointer-events-none">
+                <div className="absolute right-4 top-4 bg-black/75 text-white text-xs px-3 py-1 rounded-full pointer-events-none">
                   {Math.round(scale * 100)}%
                 </div>
 
                 <div className="absolute left-4 bottom-4 bg-black/60 text-white text-xs px-3 py-2 rounded-lg pointer-events-none">
-                  旋转：{rotate}° | 翻转：{flipHorizontal ? '水平' : ''} {flipVertical ? '垂直' : ''}
+                  滚轮缩放 · 拖动查看 · 双击重置
                 </div>
               </>
             ) : (
-              <div className="h-full flex items-center justify-center text-center text-gray-400">
-                <div>
-                  <div className="text-lg mb-2">拖拽图片到这里上传</div>
-                  <div className="text-sm">最多 5 张 · 单张 ≤20MB</div>
-                </div>
+              <div className="h-full flex items-center justify-center text-gray-400">
+                <div className="text-lg mb-2">📁 拖拽图片到这里上传</div>
+                <div className="text-sm">最多 5 张 · 单张 ≤ 20MB</div>
               </div>
             )}
           </div>
 
           {images.length > 0 && (
-            <div className="h-28 bg-white border-t px-4 py-3 overflow-x-auto">
+            <div className="h-28 bg-white border-t border-gray-200 px-4 py-3 overflow-x-auto">
               <div className="flex gap-3">
                 {images.map((img, i) => (
-                  <div key={i} className="relative">
+                  <div key={i} className="relative group">
                     <button
                       onClick={() => handleSelectImage(i)}
-                      className={`w-20 h-20 flex-shrink-0 rounded border overflow-hidden bg-gray-50 ${selectedIndex === i ? 'border-blue-600 ring-2 ring-blue-300' : 'border-gray-200'}`}
+                      className={`w-20 h-20 rounded-lg border overflow-hidden transition-all ${
+                        selectedIndex === i
+                          ? 'border-blue-500 ring-2 ring-blue-200'
+                          : 'border-gray-200 hover:border-blue-300'
+                      }`}
                     >
                       <img src={img} alt="" className="w-full h-full object-cover" />
                     </button>
+
                     <button
                       onClick={() => handleDelete(i)}
-                      className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       ×
                     </button>
@@ -330,38 +320,44 @@ export default function Home() {
           )}
         </div>
 
-        <div className="w-80 bg-white border-l p-5 overflow-y-auto">
-          <h2 className="font-bold text-lg mb-4">转换设置</h2>
+        <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto shadow-sm">
+          <h2 className="font-bold text-xl mb-5 text-[#1d1d1f]">⚙️ 转换设置</h2>
 
-          <label className="block w-full bg-gray-900 text-white text-center py-3 rounded-lg cursor-pointer">
-            上传图片
+          <label className="block w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center py-3 rounded-xl cursor-pointer font-medium shadow hover:shadow-md transition">
+            📤 选择图片
             <input type="file" accept="image/*" multiple onChange={handleUpload} className="hidden" />
           </label>
 
           {files.length > 0 && (
-            <div className="mt-3 text-sm text-gray-600 break-all">
-              <div className="mb-1 flex justify-between">
-                <span>已选：{files.length} / 5</span>
-                <button onClick={handleClearAll} className="text-red-500 text-xs">清空全部</button>
+            <div className="mt-4 text-sm text-gray-700">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">已选 {files.length}/{MAX_FILES}</span>
+                <button onClick={handleClearAll} className="text-red-500 text-sm">清空全部</button>
               </div>
 
-              {files.map((f, i) => (
-                <div key={i} className="flex justify-between items-center">
-                  <button
-                    onClick={() => handleSelectImage(i)}
-                    className={`text-left py-1 ${selectedIndex === i ? 'text-blue-600 font-medium' : 'text-gray-600'}`}
-                  >
-                    {f.name}
-                  </button>
-                  <button onClick={() => handleDelete(i)} className="text-red-500 text-xs">删除</button>
-                </div>
-              ))}
+              <div className="max-h-32 overflow-y-auto pr-1 space-y-1.5">
+                {files.map((f, i) => (
+                  <div key={i} className="flex justify-between items-center">
+                    <button
+                      onClick={() => handleSelectImage(i)}
+                      className={`text-left truncate ${selectedIndex === i ? 'text-blue-600 font-medium' : ''}`}
+                    >
+                      {f.name}
+                    </button>
+                    <button onClick={() => handleDelete(i)} className="text-red-500 text-xs">删除</button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           <div className="mt-5">
-            <label className="block mb-1 text-sm">转换类型</label>
-            <select value={format} onChange={(e) => setFormat(e.target.value)} className="w-full border rounded p-2">
+            <label className="block mb-1.5 text-sm font-medium">转换格式</label>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+            >
               <option value="png">PNG</option>
               <option value="jpg">JPG</option>
               <option value="webp">WEBP</option>
@@ -371,45 +367,60 @@ export default function Home() {
           </div>
 
           <div className="mt-4">
-            <label className="block mb-1 text-sm">DPI</label>
-            <select value={dpi} onChange={(e) => setDpi(e.target.value)} className="w-full border rounded p-2">
-              <option value="72">72</option>
-              <option value="150">150</option>
-              <option value="300">300</option>
+            <label className="block mb-1.5 text-sm font-medium">DPI 清晰度</label>
+            <select
+              value={dpi}
+              onChange={(e) => setDpi(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+            >
+              <option value="72">72 (屏幕)</option>
+              <option value="150">150 (中等)</option>
+              <option value="300">300 (高清打印)</option>
             </select>
           </div>
 
           <div className="mt-4">
-            <label className="block mb-1 text-sm">图片质量：{quality}</label>
+            <label className="block mb-1.5 text-sm font-medium">图片质量：{quality}</label>
             <input
               type="range"
               min="10"
               max="100"
-              step="1"
               value={quality}
               onChange={(e) => setQuality(Number(e.target.value))}
-              className="w-full"
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
           </div>
 
           <div className="mt-5 flex gap-2">
-            <button onClick={handleRotate} disabled={!selectedImage} className="flex-1 border rounded p-2">
-              旋转 90°
+            <button
+              onClick={handleRotate}
+              disabled={!hasImage}
+              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
+            >
+              旋转
             </button>
-            <button onClick={handleFlipHorizontal} disabled={!selectedImage} className="flex-1 border rounded p-2">
-              水平翻转
+            <button
+              onClick={handleFlipHorizontal}
+              disabled={!hasImage}
+              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
+            >
+              水平
             </button>
-            <button onClick={handleFlipVertical} disabled={!selectedImage} className="flex-1 border rounded p-2">
-              垂直翻转
+            <button
+              onClick={handleFlipVertical}
+              disabled={!hasImage}
+              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
+            >
+              垂直
             </button>
           </div>
 
           <button
             onClick={handleConvert}
-            disabled={loading}
-            className="mt-6 w-full bg-blue-600 disabled:bg-gray-400 text-white py-3 rounded-lg"
+            disabled={loading || !hasImage}
+            className="mt-6 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-medium shadow hover:shadow-lg transition disabled:bg-gray-300 disabled:shadow-none"
           >
-            {loading ? '处理中...' : '开始导出'}
+            {loading ? '⏳ 处理中...' : '🚀 开始转换并下载'}
           </button>
         </div>
       </div>
