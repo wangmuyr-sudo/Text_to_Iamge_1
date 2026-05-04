@@ -29,7 +29,6 @@ export default function Home() {
   const updateFiles = (selectedFiles: File[]) => {
     const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/'))
 
-    // 前端安全校验
     if (imageFiles.length > MAX_FILES) {
       alert(`最多上传 ${MAX_FILES} 张图片`)
       return
@@ -45,8 +44,44 @@ export default function Home() {
     }
 
     images.forEach(url => URL.revokeObjectURL(url))
+
     setFiles(imageFiles)
     setImages(imageFiles.map(file => URL.createObjectURL(file)))
+    setSelectedIndex(0)
+    resetViewer()
+  }
+
+  // 删除单张图片
+  const handleDelete = (index: number) => {
+    const newImages = [...images]
+    const newFiles = [...files]
+
+    URL.revokeObjectURL(newImages[index])
+
+    newImages.splice(index, 1)
+    newFiles.splice(index, 1)
+
+    setImages(newImages)
+    setFiles(newFiles)
+
+    if (newImages.length === 0) {
+      setSelectedIndex(0)
+    } else if (selectedIndex === index) {
+      setSelectedIndex(Math.max(0, index - 1))
+    } else if (selectedIndex > index) {
+      setSelectedIndex(selectedIndex - 1)
+    }
+    resetViewer()
+  }
+
+  // 清空所有图片
+  const handleClearAll = () => {
+    if (files.length === 0) return
+    if (!confirm('确定要清空所有图片吗？')) return
+
+    images.forEach(url => URL.revokeObjectURL(url))
+    setImages([])
+    setFiles([])
     setSelectedIndex(0)
     resetViewer()
   }
@@ -171,6 +206,15 @@ export default function Home() {
           <button className="text-sm">裁剪</button>
           <button className="text-sm">旋转</button>
           <button className="text-sm">翻转</button>
+          
+          {files.length > 0 && (
+            <button 
+              onClick={handleClearAll} 
+              className="text-sm text-red-500 mt-2"
+            >
+              清空
+            </button>
+          )}
         </div>
 
         <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} className={`flex-1 flex flex-col overflow-hidden transition ${dragging ? 'bg-blue-50 border-2 border-dashed border-blue-500' : 'bg-gray-50'}`}>
@@ -198,9 +242,21 @@ export default function Home() {
             <div className="h-28 bg-white border-t px-4 py-3 overflow-x-auto">
               <div className="flex gap-3">
                 {images.map((img, i) => (
-                  <button key={i} onClick={() => handleSelectImage(i)} className={`w-20 h-20 flex-shrink-0 rounded border overflow-hidden bg-gray-50 ${selectedIndex === i ? 'border-blue-600 ring-2 ring-blue-300' : 'border-gray-200'}`}>
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
+                  <div key={i} className="relative">
+                    <button
+                      onClick={() => handleSelectImage(i)}
+                      className={`w-20 h-20 flex-shrink-0 rounded border overflow-hidden bg-gray-50 ${selectedIndex === i ? 'border-blue-600 ring-2 ring-blue-300' : 'border-gray-200'}`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(i)}
+                      className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -213,9 +269,31 @@ export default function Home() {
 
           {files.length > 0 && (
             <div className="mt-3 text-sm text-gray-600 break-all">
-              <div className="mb-1">已选：{files.length} / 5</div>
+              <div className="mb-1 flex justify-between">
+                <span>已选：{files.length} / 5</span>
+                <button 
+                  onClick={handleClearAll} 
+                  className="text-red-500 text-xs"
+                >
+                  清空全部
+                </button>
+              </div>
+
               {files.map((f, i) => (
-                <button key={i} onClick={() => handleSelectImage(i)} className={`block w-full text-left py-1 ${selectedIndex === i ? 'text-blue-600 font-medium' : 'text-gray-600'}`}>{f.name}</button>
+                <div key={i} className="flex justify-between items-center">
+                  <button
+                    onClick={() => handleSelectImage(i)}
+                    className={`text-left py-1 ${selectedIndex === i ? 'text-blue-600 font-medium' : 'text-gray-600'}`}
+                  >
+                    {f.name}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(i)}
+                    className="text-red-500 text-xs"
+                  >
+                    删除
+                  </button>
+                </div>
               ))}
             </div>
           )}
