@@ -13,21 +13,29 @@ export default function Home() {
   const [dragging, setDragging] = useState(false)
 
   const [scale, setScale] = useState(1)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [isPanning, setIsPanning] = useState(false)
-  const lastMousePosition = useRef({ x: 0, y: 0 })
+  const [position, setPosition] = useState({ x: 0, y: 0 }) // 图片拖动位置
+  const [isDraggingImage, setIsDraggingImage] = useState(false) // 是否正在拖动图片
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 }) // 拖动起始位置
 
   const [rotate, setRotate] = useState(0)
   const [flipHorizontal, setFlipHorizontal] = useState(false)
   const [flipVertical, setFlipVertical] = useState(false)
 
+  const [selectedWidth, setSelectedWidth] = useState(0)
+  const [selectedHeight, setSelectedHeight] = useState(0)
+  const [selectedWidthMm, setSelectedWidthMm] = useState<number>(0)
+  const [selectedHeightMm, setSelectedHeightMm] = useState<number>(0)
+
   const MAX_FILES = 5
   const MAX_SIZE = 20 * 1024 * 1024
 
+  const selectedImage = images[selectedIndex]
+  const selectedFile = files[selectedIndex]
+  const hasImage = !!selectedImage
+
   const resetViewer = () => {
     setScale(1)
-    setPosition({ x: 0, y: 0 })
-    setIsPanning(false)
+    setPosition({ x: 0, y: 0 }) // 重置位置
   }
 
   const resetEdit = () => {
@@ -119,38 +127,68 @@ export default function Home() {
     resetViewer()
   }
 
+  // 滚轮缩放图片（只缩放图片，页面不动）
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!images[selectedIndex]) return
+    if (!hasImage) return
     e.preventDefault()
     setScale(prev => {
       const next = e.deltaY < 0 ? prev + 0.1 : prev - 0.1
-      return Math.min(Math.max(next, 0.1), 8)
+      return Math.min(Math.max(next, 0.5), 3)
     })
   }
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!images[selectedIndex]) return
+  // 图片拖动 - 开始
+  const handleImageMouseDown = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!hasImage) return
+    setIsDraggingImage(true)
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    })
     e.preventDefault()
-    setIsPanning(true)
-    lastMousePosition.current = { x: e.clientX, y: e.clientY }
   }
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isPanning) return
+  // 图片拖动 - 过程
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingImage || !hasImage) return
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    })
     e.preventDefault()
-    const dx = e.clientX - lastMousePosition.current.x
-    const dy = e.clientY - lastMousePosition.current.y
-    setPosition(prev => ({ x: prev.x + dx, y: prev.y + dy }))
-    lastMousePosition.current = { x: e.clientX, y: e.clientY }
   }
 
-  const stopPanning = () => setIsPanning(false)
+  // 图片拖动 - 结束
+  const handleImageMouseUp = () => {
+    setIsDraggingImage(false)
+  }
+
+  const handleImageMouseLeave = () => {
+    setIsDraggingImage(false)
+  }
 
   useEffect(() => {
-    const up = () => setIsPanning(false)
-    window.addEventListener('mouseup', up)
-    return () => window.removeEventListener('mouseup', up)
-  }, [])
+    if (!selectedImage) {
+      setSelectedWidth(0)
+      setSelectedHeight(0)
+      setSelectedWidthMm(0)
+      setSelectedHeightMm(0)
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      const w = img.naturalWidth
+      const h = img.naturalHeight
+      setSelectedWidth(w)
+      setSelectedHeight(h)
+      const dpiNum = Number(dpi)
+      const mmW = Math.round((w * 25.4) / dpiNum * 100) / 100
+      const mmH = Math.round((h * 25.4) / dpiNum * 100) / 100
+      setSelectedWidthMm(mmW)
+      setSelectedHeightMm(mmH)
+    }
+    img.src = selectedImage
+  }, [selectedImage, dpi])
 
   useEffect(() => {
     return () => images.forEach(url => URL.revokeObjectURL(url))
@@ -213,10 +251,6 @@ export default function Home() {
     }
   }
 
-  const selectedImage = images[selectedIndex]
-  const selectedFile = files[selectedIndex]
-  const hasImage = !!selectedImage
-
   return (
     <div className="h-screen flex flex-col bg-[#f7f8fa] text-[#1d1d1f]">
       <div className="h-14 bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center px-6 shadow-md text-white">
@@ -247,72 +281,63 @@ export default function Home() {
             dragging ? 'bg-blue-50 border-2 border-dashed border-blue-400' : 'bg-gray-50'
           }`}
         >
+          {/* 图片预览区域：支持拖动 + 缩放 */}
           <div
             onWheel={handleWheel}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={stopPanning}
-            onMouseLeave={stopPanning}
             onDoubleClick={resetViewer}
-            className={`relative flex-1 overflow-hidden bg-white select-none transition ${
-              hasImage ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''
-            }`}
+            onMouseMove={handleImageMouseMove}
+            onMouseUp={handleImageMouseUp}
+            onMouseLeave={handleImageMouseLeave}
+            className="relative flex-1 bg-white flex items-center justify-center cursor-move"
           >
             {hasImage ? (
               <>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <img
-                    src={selectedImage}
-                    alt="预览"
-                    draggable={false}
-                    className="bg-white rounded-lg shadow-lg object-contain"
-                    style={{
-                      maxWidth: '90%',
-                      maxHeight: '90%',
-                      transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale}) rotate(${rotate}deg) scale(${flipHorizontal ? -1 : 1}, ${flipVertical ? -1 : 1})`,
-                      transformOrigin: 'center center',
-                    }}
-                  />
-                </div>
+                <img
+                  src={selectedImage}
+                  alt="预览"
+                  draggable={false}
+                  onMouseDown={handleImageMouseDown}
+                  className="rounded-lg shadow-lg"
+                  style={{
+                    maxWidth: '90%',
+                    maxHeight: '90%',
+                    transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotate}deg) scale(${flipHorizontal ? -1 : 1}, ${flipVertical ? -1 : 1})`,
+                    transformOrigin: 'center center',
+                    transition: isDraggingImage ? 'none' : 'transform 0.15s ease',
+                    cursor: isDraggingImage ? 'grabbing' : 'grab',
+                  }}
+                />
 
                 <div className="absolute right-4 top-4 bg-black/75 text-white text-xs px-3 py-1 rounded-full pointer-events-none">
                   {Math.round(scale * 100)}%
                 </div>
-
-                <div className="absolute left-4 bottom-4 bg-black/60 text-white text-xs px-3 py-2 rounded-lg pointer-events-none">
-                  滚轮缩放 · 拖动查看 · 双击重置
-                </div>
               </>
             ) : (
-              <div className="h-full flex items-center justify-center text-gray-400">
+              <div className="text-gray-400 text-center">
                 <div className="text-lg mb-2">📁 拖拽图片到这里上传</div>
                 <div className="text-sm">最多 5 张 · 单张 ≤ 20MB</div>
               </div>
             )}
           </div>
 
+          {/* 底部多张图片缩略图（完全恢复） */}
           {images.length > 0 && (
             <div className="h-28 bg-white border-t border-gray-200 px-4 py-3 overflow-x-auto">
-              <div className="flex gap-3">
+              <div className="flex gap-3 h-full">
                 {images.map((img, i) => (
-                  <div key={i} className="relative group">
+                  <div key={i} className="relative group h-full">
                     <button
                       onClick={() => handleSelectImage(i)}
-                      className={`w-20 h-20 rounded-lg border overflow-hidden transition-all ${
-                        selectedIndex === i
-                          ? 'border-blue-500 ring-2 ring-blue-200'
-                          : 'border-gray-200 hover:border-blue-300'
+                      className={`w-20 h-full rounded-lg border overflow-hidden ${
+                        selectedIndex === i ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
                       }`}
                     >
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <img src={img} alt={`缩略图 ${i+1}`} className="w-full h-full object-cover" />
                     </button>
-
                     <button
                       onClick={() => handleDelete(i)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      ×
-                    </button>
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs"
+                    >×</button>
                   </div>
                 ))}
               </div>
@@ -320,107 +345,87 @@ export default function Home() {
           )}
         </div>
 
-        <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto shadow-sm">
-          <h2 className="font-bold text-xl mb-5 text-[#1d1d1f]">⚙️ 转换设置</h2>
+        <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
+          <h2 className="font-bold text-xl mb-5">⚙️ 转换设置</h2>
 
-          <label className="block w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center py-3 rounded-xl cursor-pointer font-medium shadow hover:shadow-md transition">
+          {/* 毫米输入换算（无报错） */}
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+            <div className="text-sm font-medium text-blue-700 mb-2">📏 毫米 ↔ 像素 换算</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500">宽度 (mm)</label>
+                <input
+                  type="number"
+                  className="w-full border p-1.5 rounded text-sm mt-1"
+                  value={selectedWidthMm ?? ''}
+                  onChange={(e) => {
+                    const mm = Number(e.target.value) || 0
+                    setSelectedWidthMm(mm)
+                    setSelectedWidth(Math.round((mm * Number(dpi)) / 25.4))
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">高度 (mm)</label>
+                <input
+                  type="number"
+                  className="w-full border p-1.5 rounded text-sm mt-1"
+                  value={selectedHeightMm ?? ''}
+                  onChange={(e) => {
+                    const mm = Number(e.target.value) || 0
+                    setSelectedHeightMm(mm)
+                    setSelectedHeight(Math.round((mm * Number(dpi)) / 25.4))
+                  }}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-gray-600 mt-2">
+              对应像素：{selectedWidth} × {selectedHeight} px
+            </div>
+          </div>
+
+          <label className="block bg-blue-600 text-white py-3 rounded-xl text-center cursor-pointer mb-4">
             📤 选择图片
             <input type="file" accept="image/*" multiple onChange={handleUpload} className="hidden" />
           </label>
 
-          {files.length > 0 && (
-            <div className="mt-4 text-sm text-gray-700">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium">已选 {files.length}/{MAX_FILES}</span>
-                <button onClick={handleClearAll} className="text-red-500 text-sm">清空全部</button>
-              </div>
-
-              <div className="max-h-32 overflow-y-auto pr-1 space-y-1.5">
-                {files.map((f, i) => (
-                  <div key={i} className="flex justify-between items-center">
-                    <button
-                      onClick={() => handleSelectImage(i)}
-                      className={`text-left truncate ${selectedIndex === i ? 'text-blue-600 font-medium' : ''}`}
-                    >
-                      {f.name}
-                    </button>
-                    <button onClick={() => handleDelete(i)} className="text-red-500 text-xs">删除</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-5">
-            <label className="block mb-1.5 text-sm font-medium">转换格式</label>
-            <select
-              value={format}
-              onChange={(e) => setFormat(e.target.value)}
-              className="w-full border border-gray-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-            >
+          <div className="mt-3">
+            <label className="text-sm font-medium">格式</label>
+            <select value={format} onChange={(e) => setFormat(e.target.value)} className="w-full border rounded-lg p-2 mt-1">
               <option value="png">PNG</option>
               <option value="jpg">JPG</option>
               <option value="webp">WEBP</option>
               <option value="tiff">TIFF</option>
-              <option value="cmyk">CMYK JPG</option>
+              <option value="cmyk">CMYK</option>
             </select>
           </div>
 
-          <div className="mt-4">
-            <label className="block mb-1.5 text-sm font-medium">DPI 清晰度</label>
-            <select
-              value={dpi}
-              onChange={(e) => setDpi(e.target.value)}
-              className="w-full border border-gray-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-            >
-              <option value="72">72 (屏幕)</option>
-              <option value="150">150 (中等)</option>
-              <option value="300">300 (高清打印)</option>
+          <div className="mt-3">
+            <label className="text-sm font-medium">DPI</label>
+            <select value={dpi} onChange={(e) => setDpi(e.target.value)} className="w-full border rounded-lg p-2 mt-1">
+              <option value="72">72</option>
+              <option value="150">150</option>
+              <option value="300">300</option>
             </select>
           </div>
 
-          <div className="mt-4">
-            <label className="block mb-1.5 text-sm font-medium">图片质量：{quality}</label>
-            <input
-              type="range"
-              min="10"
-              max="100"
-              value={quality}
-              onChange={(e) => setQuality(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
+          <div className="mt-3">
+            <label className="text-sm font-medium">质量：{quality}</label>
+            <input type="range" min="10" max="100" value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-full mt-1" />
           </div>
 
-          <div className="mt-5 flex gap-2">
-            <button
-              onClick={handleRotate}
-              disabled={!hasImage}
-              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
-            >
-              旋转
-            </button>
-            <button
-              onClick={handleFlipHorizontal}
-              disabled={!hasImage}
-              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
-            >
-              水平
-            </button>
-            <button
-              onClick={handleFlipVertical}
-              disabled={!hasImage}
-              className="flex-1 border border-gray-300 rounded-xl p-2 text-sm hover:bg-gray-50 disabled:opacity-40"
-            >
-              垂直
-            </button>
+          <div className="mt-4 flex gap-2">
+            <button onClick={handleRotate} disabled={!hasImage} className="flex-1 border rounded-lg p-2">旋转</button>
+            <button onClick={handleFlipHorizontal} disabled={!hasImage} className="flex-1 border rounded-lg p-2">水平</button>
+            <button onClick={handleFlipVertical} disabled={!hasImage} className="flex-1 border rounded-lg p-2">垂直</button>
           </div>
 
           <button
             onClick={handleConvert}
             disabled={loading || !hasImage}
-            className="mt-6 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-medium shadow hover:shadow-lg transition disabled:bg-gray-300 disabled:shadow-none"
+            className="mt-5 w-full bg-blue-600 text-white py-3 rounded-xl"
           >
-            {loading ? '⏳ 处理中...' : '🚀 开始转换并下载'}
+            {loading ? '处理中...' : '🚀 开始转换'}
           </button>
         </div>
       </div>

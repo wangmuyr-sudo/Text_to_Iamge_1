@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const files = formData.getAll('files').filter(isUploadedFile)
     const type = String(formData.get('type') || 'png')
-    const dpi = Number(formData.get('dpi') || 72)
+    const dpi = Number(formData.get('dpi') || 300)
     const quality = Math.max(10, Math.min(100, Number(formData.get('quality') || 90)))
     const rotate = Number(formData.get('rotate') || 0)
     const flipHorizontal = formData.get('flipHorizontal') === 'true'
@@ -59,25 +59,35 @@ export async function POST(req: NextRequest) {
 
         let image = sharp(inputBuffer, { failOn: 'none' })
 
-        // 编辑处理
         if (flipHorizontal) image = image.flop()
         if (flipVertical) image = image.flip()
         if (rotate > 0) image = image.rotate(rotate)
 
+        // 统一设置 DPI 元数据（关键优化）
+        const withDpi = image.withMetadata({ density: dpi })
+
         if (type === 'png') {
-          outputBuffer = await image.withMetadata({ density: dpi }).png({ quality }).toBuffer()
+          outputBuffer = await withDpi.png({ quality }).toBuffer()
           ext = 'png'
         } else if (type === 'jpg' || type === 'jpeg') {
-          outputBuffer = await image.withMetadata({ density: dpi }).jpeg({ quality }).toBuffer()
+          outputBuffer = await withDpi.jpeg({ quality }).toBuffer()
           ext = 'jpg'
         } else if (type === 'webp') {
-          outputBuffer = await image.withMetadata({ density: dpi }).webp({ quality }).toBuffer()
+          outputBuffer = await withDpi.webp({ quality }).toBuffer()
           ext = 'webp'
         } else if (type === 'tiff') {
-          outputBuffer = await image.withMetadata({ density: dpi }).tiff({ quality }).toBuffer()
+          outputBuffer = await withDpi.tiff({
+            quality,
+            compression: 'lzw',
+            xres: dpi,
+            yres: dpi
+          }).toBuffer()
           ext = 'tiff'
         } else if (type === 'cmyk') {
-          outputBuffer = await image.toColourspace('cmyk').withMetadata({ density: dpi }).jpeg({ quality }).toBuffer()
+          outputBuffer = await withDpi
+            .toColourspace('cmyk')
+            .jpeg({ quality })
+            .toBuffer()
           ext = 'jpg'
         } else {
           throw new Error('不支持的格式')
