@@ -8,17 +8,46 @@ export default function Home() {
   const [format, setFormat] = useState('png')
   const [dpi, setDpi] = useState('300')
   const [loading, setLoading] = useState(false)
+  const [dragging, setDragging] = useState(false)
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || [])
-    if (selectedFiles.length === 0) return
+  const updateFiles = (selectedFiles: File[]) => {
+    const imageFiles = selectedFiles.filter((file) =>
+      file.type.startsWith('image/')
+    )
+
+    if (imageFiles.length === 0) {
+      alert('请上传图片文件')
+      return
+    }
 
     images.forEach((url) => URL.revokeObjectURL(url))
 
-    setFiles(selectedFiles)
-    setImages(selectedFiles.map((file) => URL.createObjectURL(file)))
+    setFiles(imageFiles)
+    setImages(imageFiles.map((file) => URL.createObjectURL(file)))
+  }
 
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || [])
+    updateFiles(selectedFiles)
     e.target.value = ''
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(false)
+
+    const droppedFiles = Array.from(e.dataTransfer.files || [])
+    updateFiles(droppedFiles)
   }
 
   useEffect(() => {
@@ -51,20 +80,38 @@ export default function Home() {
       })
 
       if (!res.ok) {
-        let message = '转换失败'
+        let message = '转换失败，请稍后重试'
 
         try {
           const data = await res.json()
           message = data.error || message
         } catch {
-          message = await res.text()
+          try {
+            const text = await res.text()
+            if (text) message = text
+          } catch {}
         }
 
-        alert(message)
+        if (res.status === 400) {
+          alert(`参数错误：${message}`)
+        } else if (res.status === 413) {
+          alert('上传文件过大，请减少图片数量或压缩后再试')
+        } else if (res.status === 500) {
+          alert(`服务器处理失败：${message}`)
+        } else {
+          alert(`转换失败：${message}`)
+        }
+
         return
       }
 
       const blob = await res.blob()
+
+      if (blob.size === 0) {
+        alert('转换失败：下载文件为空')
+        return
+      }
+
       const url = URL.createObjectURL(blob)
 
       const a = document.createElement('a')
@@ -77,7 +124,12 @@ export default function Home() {
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error(error)
-      alert('转换请求失败，请检查后端接口')
+
+      if (error instanceof TypeError) {
+        alert('请求失败：无法连接到转换接口，请检查后端服务是否正常运行')
+      } else {
+        alert('转换过程中发生未知错误')
+      }
     } finally {
       setLoading(false)
     }
@@ -87,7 +139,9 @@ export default function Home() {
     <div className="h-screen flex flex-col bg-gray-100">
       <div className="h-14 bg-yellow-400 flex items-center justify-between px-5 border-b">
         <div className="font-bold text-lg">AI 图片转换工具</div>
-        <button className="bg-black text-white px-5 py-2 rounded-lg">保存</button>
+        <button className="bg-black text-white px-5 py-2 rounded-lg">
+          保存
+        </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -108,7 +162,16 @@ export default function Home() {
           <button className="text-sm">翻转</button>
         </div>
 
-        <div className="flex-1 flex items-center justify-center bg-gray-50 overflow-auto p-6">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`flex-1 flex items-center justify-center overflow-auto p-6 transition ${
+            dragging
+              ? 'bg-blue-50 border-2 border-dashed border-blue-500'
+              : 'bg-gray-50'
+          }`}
+        >
           {images.length > 0 ? (
             <div className="flex flex-wrap gap-4">
               {images.map((image, index) => (
@@ -121,7 +184,10 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="text-gray-400">请上传图片</div>
+            <div className="text-center text-gray-400">
+              <div className="text-lg mb-2">拖拽图片到这里上传</div>
+              <div className="text-sm">或点击左侧 / 右侧上传按钮</div>
+            </div>
           )}
         </div>
 
