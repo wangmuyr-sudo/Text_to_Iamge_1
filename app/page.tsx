@@ -1,14 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function Home() {
   const [images, setImages] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const [format, setFormat] = useState('png')
   const [dpi, setDpi] = useState('300')
   const [loading, setLoading] = useState(false)
   const [dragging, setDragging] = useState(false)
+
+  const [scale, setScale] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+
+  const lastMousePosition = useRef({ x: 0, y: 0 })
+
+  const resetViewer = () => {
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
+    setIsPanning(false)
+  }
 
   const updateFiles = (selectedFiles: File[]) => {
     const imageFiles = selectedFiles.filter((file) =>
@@ -24,6 +37,8 @@ export default function Home() {
 
     setFiles(imageFiles)
     setImages(imageFiles.map((file) => URL.createObjectURL(file)))
+    setSelectedIndex(0)
+    resetViewer()
   }
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,6 +64,73 @@ export default function Home() {
     const droppedFiles = Array.from(e.dataTransfer.files || [])
     updateFiles(droppedFiles)
   }
+
+  const handleSelectImage = (index: number) => {
+    setSelectedIndex(index)
+    resetViewer()
+  }
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!images[selectedIndex]) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    setScale((prev) => {
+      const nextScale = e.deltaY < 0 ? prev + 0.1 : prev - 0.1
+      return Math.min(Math.max(nextScale, 0.1), 8)
+    })
+  }
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!images[selectedIndex]) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    setIsPanning(true)
+
+    lastMousePosition.current = {
+      x: e.clientX,
+      y: e.clientY,
+    }
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanning) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const dx = e.clientX - lastMousePosition.current.x
+    const dy = e.clientY - lastMousePosition.current.y
+
+    setPosition((prev) => ({
+      x: prev.x + dx,
+      y: prev.y + dy,
+    }))
+
+    lastMousePosition.current = {
+      x: e.clientX,
+      y: e.clientY,
+    }
+  }
+
+  const stopPanning = () => {
+    setIsPanning(false)
+  }
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsPanning(false)
+    }
+
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -135,6 +217,9 @@ export default function Home() {
     }
   }
 
+  const selectedImage = images[selectedIndex]
+  const selectedFile = files[selectedIndex]
+
   return (
     <div className="h-screen flex flex-col bg-gray-100">
       <div className="h-14 bg-yellow-400 flex items-center justify-between px-5 border-b">
@@ -166,27 +251,86 @@ export default function Home() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`flex-1 flex items-center justify-center overflow-auto p-6 transition ${
+          className={`flex-1 flex flex-col overflow-hidden transition ${
             dragging
               ? 'bg-blue-50 border-2 border-dashed border-blue-500'
               : 'bg-gray-50'
           }`}
         >
-          {images.length > 0 ? (
-            <div className="flex flex-wrap gap-4">
-              {images.map((image, index) => (
-                <img
-                  key={image}
-                  src={image}
-                  alt={`preview-${index}`}
-                  className="max-w-[150px] max-h-[150px] border shadow bg-white object-contain"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-gray-400">
-              <div className="text-lg mb-2">拖拽图片到这里上传</div>
-              <div className="text-sm">或点击左侧 / 右侧上传按钮</div>
+          <div
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={stopPanning}
+            onMouseLeave={stopPanning}
+            onDoubleClick={resetViewer}
+            className={`relative flex-1 overflow-hidden bg-gray-50 select-none ${
+              selectedImage
+                ? isPanning
+                  ? 'cursor-grabbing'
+                  : 'cursor-grab'
+                : ''
+            }`}
+          >
+            {selectedImage ? (
+              <>
+                <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={selectedImage}
+                    alt={selectedFile?.name || 'preview'}
+                    draggable={false}
+                    className="bg-white border shadow pointer-events-none"
+                    style={{
+                      maxWidth: 'none',
+                      maxHeight: 'none',
+                      width: 'auto',
+                      height: 'auto',
+                      transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
+                      transformOrigin: 'center center',
+                      willChange: 'transform',
+                    }}
+                  />
+                </div>
+
+                <div className="absolute right-4 top-4 bg-black/70 text-white text-xs px-3 py-1 rounded-full pointer-events-none">
+                  {Math.round(scale * 100)}%
+                </div>
+
+                <div className="absolute left-4 bottom-4 bg-black/60 text-white text-xs px-3 py-2 rounded-lg pointer-events-none">
+                  原始像素显示 · 滚轮缩放 · 拖动查看 · 双击重置
+                </div>
+              </>
+            ) : (
+              <div className="h-full flex items-center justify-center text-center text-gray-400">
+                <div>
+                  <div className="text-lg mb-2">拖拽图片到这里上传</div>
+                  <div className="text-sm">或点击左侧 / 右侧上传按钮</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {images.length > 0 && (
+            <div className="h-28 bg-white border-t px-4 py-3 overflow-x-auto">
+              <div className="flex gap-3">
+                {images.map((image, index) => (
+                  <button
+                    key={image}
+                    onClick={() => handleSelectImage(index)}
+                    className={`w-20 h-20 flex-shrink-0 rounded border overflow-hidden bg-gray-50 ${
+                      selectedIndex === index
+                        ? 'border-blue-600 ring-2 ring-blue-300'
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    <img
+                      src={image}
+                      alt={`thumbnail-${index}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -209,7 +353,17 @@ export default function Home() {
             <div className="mt-3 text-sm text-gray-600 break-all">
               <div className="mb-1">当前文件：{files.length} 个</div>
               {files.map((file, index) => (
-                <div key={`${file.name}-${index}`}>{file.name}</div>
+                <button
+                  key={`${file.name}-${index}`}
+                  onClick={() => handleSelectImage(index)}
+                  className={`block w-full text-left py-1 ${
+                    selectedIndex === index
+                      ? 'text-blue-600 font-medium'
+                      : 'text-gray-600'
+                  }`}
+                >
+                  {file.name}
+                </button>
               ))}
             </div>
           )}
