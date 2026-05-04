@@ -15,7 +15,7 @@ export default function Home() {
   const [scale, setScale] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDraggingImage, setIsDraggingImage] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const dragStartRef = useRef({ x: 0, y: 0 })
 
   const [rotate, setRotate] = useState(0)
   const [flipHorizontal, setFlipHorizontal] = useState(false)
@@ -23,17 +23,15 @@ export default function Home() {
 
   const [selectedWidth, setSelectedWidth] = useState(0)
   const [selectedHeight, setSelectedHeight] = useState(0)
-  const [selectedWidthMm, setSelectedWidthMm] = useState<number>(0)
-  const [selectedHeightMm, setSelectedHeightMm] = useState<number>(0)
+  const [widthMmText, setWidthMmText] = useState<string>('')
+  const [heightMmText, setHeightMmText] = useState<string>('')
 
   const MAX_FILES = 5
   const MAX_SIZE = 20 * 1024 * 1024
 
   const selectedImage = images[selectedIndex]
-  const selectedFile = files[selectedIndex]
   const hasImage = !!selectedImage
 
-  // 快捷键支持
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -49,7 +47,6 @@ export default function Home() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [hasImage, selectedIndex])
 
-  // 重置视图
   const resetViewer = () => {
     setScale(1)
     setPosition({ x: 0, y: 0 })
@@ -61,7 +58,6 @@ export default function Home() {
     setFlipVertical(false)
   }
 
-  // 统一更新文件
   const updateFiles = (selectedFiles: File[]) => {
     const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/'))
     if (imageFiles.length > MAX_FILES) {
@@ -86,7 +82,6 @@ export default function Home() {
     resetEdit()
   }
 
-  // 删除单张
   const handleDelete = (index: number) => {
     const newImages = [...images]
     const newFiles = [...files]
@@ -107,7 +102,6 @@ export default function Home() {
     resetViewer()
   }
 
-  // 清空所有
   const handleClearAll = () => {
     if (files.length === 0) return
     if (!confirm('确定要清空所有图片吗？')) return
@@ -119,14 +113,12 @@ export default function Home() {
     resetEdit()
   }
 
-  // 上传
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
     updateFiles(selectedFiles)
     e.target.value = ''
   }
 
-  // 拖拽区域
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(true)
@@ -142,13 +134,11 @@ export default function Home() {
     updateFiles(droppedFiles)
   }
 
-  // 切换预览图
   const handleSelectImage = (index: number) => {
     setSelectedIndex(index)
     resetViewer()
   }
 
-  // 滚轮缩放
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!hasImage) return
     e.preventDefault()
@@ -158,33 +148,33 @@ export default function Home() {
     })
   }
 
-  // 图片拖动
   const handleImageMouseDown = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!hasImage) return
     setIsDraggingImage(true)
-    setDragStart({
+    dragStartRef.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y
-    })
+    }
     e.preventDefault()
   }
+
   const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDraggingImage || !hasImage) return
     setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y
     })
   }
+
   const handleImageMouseUp = () => setIsDraggingImage(false)
   const handleImageMouseLeave = () => setIsDraggingImage(false)
 
-  // 尺寸实时计算（双向绑定）
   useEffect(() => {
     if (!selectedImage) {
       setSelectedWidth(0)
       setSelectedHeight(0)
-      setSelectedWidthMm(0)
-      setSelectedHeightMm(0)
+      setWidthMmText('')
+      setHeightMmText('')
       return
     }
     const img = new Image()
@@ -194,31 +184,22 @@ export default function Home() {
       setSelectedWidth(w)
       setSelectedHeight(h)
       const dpiNum = Number(dpi)
-      setSelectedWidthMm(Math.round((w * 25.4) / dpiNum * 100) / 100)
-      setSelectedHeightMm(Math.round((h * 25.4) / dpiNum * 100) / 100)
+      const mmW = Math.round((w * 25.4) / dpiNum * 100) / 100
+      const mmH = Math.round((h * 25.4) / dpiNum * 100) / 100
+      setWidthMmText(String(mmW))
+      setHeightMmText(String(mmH))
     }
     img.src = selectedImage
   }, [selectedImage, dpi])
 
-  // 像素改毫米
-  useEffect(() => {
-    if (!selectedImage) return
-    const dpiNum = Number(dpi)
-    setSelectedWidthMm(Math.round((selectedWidth * 25.4) / dpiNum * 100) / 100)
-    setSelectedHeightMm(Math.round((selectedHeight * 25.4) / dpiNum * 100) / 100)
-  }, [selectedWidth, selectedHeight, dpi])
-
-  // 内存清理
   useEffect(() => {
     return () => images.forEach(url => URL.revokeObjectURL(url))
   }, [images])
 
-  // 编辑
   const handleRotate = () => setRotate(prev => (prev + 90) % 360)
   const handleFlipHorizontal = () => setFlipHorizontal(prev => !prev)
   const handleFlipVertical = () => setFlipVertical(prev => !prev)
 
-  // 转换
   const handleConvert = async () => {
     if (files.length === 0) {
       alert('请先上传图片')
@@ -264,19 +245,26 @@ export default function Home() {
     }
   }
 
-  // 文件大小统计
   const totalSize = files.reduce((s, f) => s + f.size, 0)
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2)
 
+  // 仅修复输入框：允许数字 + 单个小数点
+  const filterMmInput = (val: string) => {
+    let res = val.replace(/[^0-9.]/g, '')
+    const dotIndex = res.indexOf('.')
+    if (dotIndex !== -1) {
+      res = res.slice(0, dotIndex + 1) + res.slice(dotIndex + 1).replace(/\./g, '')
+    }
+    return res
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[#f7f8fa] text-[#1d1d1f] select-none">
-      {/* 顶部栏 */}
       <div className="h-14 bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center px-6 shadow-md text-white">
         <div className="font-bold text-lg tracking-wide">🖼️ 智能图片转换工具</div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* 左侧工具栏 */}
         <div className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-5 shadow-sm">
           <label className="text-sm cursor-pointer text-center hover:text-blue-600 transition-colors font-medium">
             上传
@@ -292,7 +280,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* 中间预览区 */}
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -338,7 +325,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* 缩略图 */}
           {images.length > 0 && (
             <div className="h-28 bg-white border-t border-gray-200 px-4 py-3 overflow-x-auto">
               <div className="flex gap-3 h-full">
@@ -363,11 +349,9 @@ export default function Home() {
           )}
         </div>
 
-        {/* 右侧设置面板 */}
         <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
           <h2 className="font-bold text-xl mb-5">⚙️ 转换设置</h2>
 
-          {/* 文件信息 */}
           {files.length > 0 && (
             <div className="p-3 bg-green-50 rounded-lg border border-green-200 mb-4 text-sm">
               <div>已上传：{files.length} 张</div>
@@ -375,19 +359,20 @@ export default function Home() {
             </div>
           )}
 
-          {/* 尺寸换算 */}
           <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
             <div className="text-sm font-medium text-blue-700 mb-2">📏 毫米 ↔ 像素 换算</div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-gray-500">宽度 (mm)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className="w-full border p-1.5 rounded text-sm mt-1 outline-none focus:border-blue-400"
-                  value={selectedWidthMm ?? ''}
+                  value={widthMmText}
                   onChange={(e) => {
-                    const mm = Number(e.target.value) || 0
-                    setSelectedWidthMm(mm)
+                    const val = filterMmInput(e.target.value)
+                    setWidthMmText(val)
+                    const mm = parseFloat(val) || 0
                     setSelectedWidth(Math.round((mm * Number(dpi)) / 25.4))
                   }}
                 />
@@ -395,12 +380,14 @@ export default function Home() {
               <div>
                 <label className="text-xs text-gray-500">高度 (mm)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className="w-full border p-1.5 rounded text-sm mt-1 outline-none focus:border-blue-400"
-                  value={selectedHeightMm ?? ''}
+                  value={heightMmText}
                   onChange={(e) => {
-                    const mm = Number(e.target.value) || 0
-                    setSelectedHeightMm(mm)
+                    const val = filterMmInput(e.target.value)
+                    setHeightMmText(val)
+                    const mm = parseFloat(val) || 0
                     setSelectedHeight(Math.round((mm * Number(dpi)) / 25.4))
                   }}
                 />
